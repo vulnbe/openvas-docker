@@ -155,6 +155,11 @@ RUN apt update && \
       socat \
       sqlite3 \
       supervisor \
+      texlive-latex-base \
+      preview-latex-style \
+      texlive-latex-extra \
+      texlive-latex-recommended \
+      texlive-pictures \
       traceroute \
       tzdata \
       wget \
@@ -186,9 +191,9 @@ RUN gvm-manage-certs -a && \
 COPY ./redis.conf /etc/openvas-redis.conf
 COPY ./supervisor.conf /etc/openvas-supervisor.conf
 COPY ./entrypoint.py /
-COPY ./gvm.py /
+COPY ./gvm_client.py /
 
-RUN chmod +x /entrypoint.py /gvm.py
+RUN chmod +x /entrypoint.py /gvm_client.py
 
 VOLUME [ "/configs" ]
 VOLUME [ "/targets" ]
