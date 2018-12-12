@@ -16,6 +16,7 @@ reports_path = '/reports'
 configs_path = '/configs'
 targets_path = '/targets'
 tasks_path = '/tasks'
+overrides_path = '/overrides'
 
 gvmd_wait_secs = 6
 gvmd_connect_tries = 10
@@ -47,7 +48,7 @@ if __name__ == '__main__':
       password=os.environ.get(env_ov_passwd),
       loglevel=loglevel)
 
-    while not processor.test_connection():
+    while not processor.connect():
       if processor.connection_errors <= gvmd_connect_tries:
         sleep(gvmd_wait_secs)
       else:
@@ -58,6 +59,7 @@ if __name__ == '__main__':
     processor.import_targets(targets_path)
     processor.import_tasks(tasks_path)
     processor.import_reports(reports_path)
+    # processor.import_overrides(overrides_path)
 
   except Exception as ex:
     logging.log(logging.ERROR, 'GVM_client error: {}'.format(ex))
