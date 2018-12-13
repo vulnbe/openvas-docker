@@ -12,11 +12,11 @@ db_path = '/var/lib/openvas/gvmd/gvmd.db'
 gvm_socket = '/var/run/gvmd.sock'
 ov_user = 'admin'
 
+overrides_path = '/overrides'
 reports_path = '/reports'
 configs_path = '/configs'
 targets_path = '/targets'
 tasks_path = '/tasks'
-overrides_path = '/overrides'
 
 gvmd_wait_secs = 6
 gvmd_connect_tries = 10
@@ -52,14 +52,15 @@ if __name__ == '__main__':
       if processor.connection_errors <= gvmd_connect_tries:
         sleep(gvmd_wait_secs)
       else:
-        logging.log(logging.ERROR, 'Can\'t connect to gvmd for {} sec'.format(gvmd_connect_tries*gvmd_wait_secs))
-        exit(1)
+        raise Exception('Can\'t connect to gvmd for {} sec'.format(gvmd_connect_tries*gvmd_wait_secs))
 
     processor.import_configs(configs_path)
     processor.import_targets(targets_path)
     processor.import_tasks(tasks_path)
+
+    processor.sync_wait()
     processor.import_reports(reports_path)
-    # processor.import_overrides(overrides_path)
+    processor.import_overrides(overrides_path)
 
   except Exception as ex:
     logging.log(logging.ERROR, 'GVM_client error: {}'.format(ex))

@@ -4,11 +4,11 @@ import os
 import datetime
 import decimal
 import logging
-import xml.etree.ElementTree as ET
-
+import lxml.etree as ET
+from time import sleep
 from gvm.connections import UnixSocketConnection, DebugConnection
 from gvm.protocols.latest import Gmp
-from gvm.transforms import EtreeTransform, EtreeCheckCommandTransform
+from gvm.transforms import EtreeCheckCommandTransform
 from gvm.errors import GvmError
 
 def objectify(element):
@@ -40,12 +40,19 @@ def objectify(element):
   return result
 
 def get_root(tree, root_name):
-  if isinstance(tree, ET.ElementTree):
+  if isinstance(tree, ET._ElementTree):
     return tree.find(root_name)
-  elif isinstance(tree, ET.Element):
-    return tree.find(root_name)
+  elif isinstance(tree, ET._Element):
+    if tree.tag == root_name:
+      return tree
+    else:
+      return tree.find(root_name)
   elif isinstance(tree, str):
-    return ET.fromstring(tree).find(root_name)
+    root = ET.fromstring(tree)
+    if root.tag == root_name:
+      return root
+    else:
+      return root.find(root_name)
   else:
     return None
 
@@ -135,6 +142,7 @@ class Report:
 
       self.raw = ET.tostring(root)
       self.report_id = root.attrib['id']
+      self.name = root.findtext('name', None)
       self.task_name = root.findtext('task/name', None)
       self.task_comment = root.findtext('task/comment', None)
 
@@ -166,7 +174,7 @@ class Task:
 
       for field, attr in [('config','id'), ('target','id'), ('scanner','id'), ('schedule','id')]:
         try:
-          attr_val = getattr(self, field)[attr]
+          attr_val = getattr(self, field, '')[attr]
           if attr_val != '':
             setattr(self, '{}_{}'.format(field, attr), attr_val)
         except:
@@ -199,8 +207,8 @@ class Task:
             setattr(self, field, None)
 
       try:
-        last_report = root.find('last_report')
-        self.last_report = Report(last_report)
+        current_report = root.find('current_report')
+        self.current_report = Report(current_report)
       except:
         pass
 
@@ -337,10 +345,20 @@ class GVM_client:
     for file_name in os.listdir(directory):
       if file_name.lower().endswith(".xml"):
         file_path = os.path.join(directory, file_name)
-        logging.log(logging.DEBUG, 'Processing file {}'.format(file_path))
+        logging.info('Reading file {}'.format(file_path))
+        
         with io.open(file_path, 'r', encoding='utf-8') as file:
           results.append(''.join(file.readlines()))
     return results
+
+  def sync_wait(self):
+    while True:
+      families = self.gmp.get_nvt_families().xpath('families/family')
+      if len(families) != 0:
+        break
+      else:
+        logging.info('Waiting for syncing NVTs finished')
+        sleep(15)
 
   def import_configs(self, directory):
     for config in self.get_xmls(directory):
@@ -350,7 +368,7 @@ class GVM_client:
         if response.attrib['status'] == '201':
           config_root = ET.fromstring(config)
           config_name = config_root.findtext('config/name')
-          logging.log(logging.INFO, 'Importing config OK: {}'.format(config_name))
+          logging.info('Importing config OK: {}'.format(config_name))
 
       except Exception as ex:
         logging.error('Importing config error: {}'.format(ex))
@@ -376,7 +394,7 @@ class GVM_client:
         esxi_credential_id=target.esxi_credential_id)
 
       if response.attrib['status'] == '201':
-        logging.log(logging.INFO, 'Importing target OK: {}'.format(target.name))
+        logging.info('Importing target OK: {}'.format(target.name))
 
     except Exception as ex:
       logging.error('Importing target error: {}'.format(ex))
@@ -386,11 +404,11 @@ class GVM_client:
       directory: path to exported targets in XML
     '''
     for target_config in self.get_xmls(directory):
-        try:
-          target = Target(target_config)
-          self.create_target(target)
-        except Exception as ex:
-          logging.error('Importing target error: {}'.format(ex))
+      try:
+        target = Target(target_config)
+        self.create_target(target)
+      except Exception as ex:
+        logging.error('Importing target error: {}'.format(ex))
 
   def create_task(self, task:Task):
     try:
@@ -408,7 +426,7 @@ class GVM_client:
         observers=task.observers)
 
       if response.attrib['status'] == '201':
-          logging.log(logging.INFO, 'Importing task OK: {}'.format(task.name))
+        logging.info('Importing task OK: {}'.format(task.name))
 
     except Exception as ex:
       logging.error('Importing task error: {}'.format(ex))
@@ -430,7 +448,7 @@ class GVM_client:
         new_threat=override.new_threat)
 
       if response.attrib['status'] == '201':
-        logging.log(logging.INFO, 'Creating override OK: {}'.format(override.text))
+        logging.info('Creating override OK: {}'.format(override.text))
 
     except Exception as ex:
       logging.error('Creating override error: {}'.format(ex))
@@ -481,7 +499,7 @@ class GVM_client:
           response = self.gmp.import_report(report_xml, task_name=report.task_name, task_comment=report.task_comment)
 
           if response.attrib['status'] == '201':
-            logging.log(logging.INFO, 'Importing report OK: {}'.format(report.task_name))
+            logging.info('Importing report OK: {}'.format(report.task_name))
             tasks = self.gmp.get_tasks().xpath('task')
             for task in tasks:
               if task.find('name').text == report.task_name and self._is_container_task(task):
@@ -491,27 +509,39 @@ class GVM_client:
         else:
           response = self.gmp.import_report(report_xml, task_id=self.container_tasks[report.task_name])
           if response.attrib['status'] == '201':
-            logging.log(logging.INFO, 'Importing report OK: {}'.format(report.task_name))
+            logging.info('Importing report OK: {}'.format(report.task_name))
       except Exception as ex:
         logging.error('Importing report error: {}'.format(ex))
+
+  def get_task(self, task_id):
+    try:
+      response = self.gmp.get_task(task_id=task_id)
+      if response.attrib['status'] == '200':
+        task = Task(response.find('task'))
+        logging.info('Get task OK: {} [{}]'.format(task.name, task_id))
+        return task
+      else:
+        return None
+    except Exception as ex:
+      logging.error('Get task error: {}'.format(ex))
 
   def get_task_status(self, task_id):
     try:
       response = self.gmp.get_task(task_id=task_id)
       if response.attrib['status'] == '200':
         task_status = response.find('task/status').text
-        logging.log(logging.INFO, 'Get task status OK: {} [{}]'.format(task_id, task_status))
+        logging.info('Get task status OK: {} [{}]'.format(task_id, task_status))
         return task_status
       else:
         return None
     except Exception as ex:
       logging.error('Get task status error: {}'.format(ex))
 
-  def run_task(self, task_id):
+  def run_task(self, task_id:str):
     try:
       response = self.gmp.start_task(task_id=task_id)
       if response.attrib['status'] == '200':
-        logging.log(logging.INFO, 'Running task OK: {}'.format(task_id))
+        logging.info('Running task OK: {}'.format(task_id))
         return True
       else:
         return False
@@ -524,8 +554,8 @@ class GVM_client:
 
   def get_targets(self):
     try:
-      targets = self.gmp.get_targets().xpath('target')
-      logging.log(logging.DEBUG, 'Targets found in DB: {}'.format(', '.join([target.find('name').text for target in targets])))
+      targets = [Target(target) for target in self.gmp.get_targets().xpath('target')]
+      logging.info('Targets found in DB: {}'.format(', '.join([target.name for target in targets])))
       return targets
     except Exception as ex:
       logging.error('Get targets error: {}'.format(ex))
@@ -534,11 +564,32 @@ class GVM_client:
   def get_tasks(self, exclude_containers=True):
     try:
       tasks = self.gmp.get_tasks().xpath('task')
-      logging.log(logging.DEBUG, 'Tasks found in DB: {}'.format(', '.join(['{}[id:{}][reports:{}]'.format(task.find('name').text, task.attrib['id'], task.find('report_count').text) for task in tasks])))
+      logging.info('Tasks found in DB: {}'.format(', '.join([task.find('name').text for task in tasks])))
       if exclude_containers:
-        return [task for task in tasks if not self._is_container_task(task)]
+        return [Task(task) for task in tasks if not self._is_container_task(task)]
       else:
-        return tasks
+        return [Task(task) for task in tasks]
     except Exception as ex:
       logging.error('Get tasks error: {}'.format(ex))
+      return False
+
+  def save_report(self, report_id:str, directory:str):
+    try:
+      raw_report = self.gmp.get_report(report_id).find('report')
+      report = Report(raw_report)
+      logging.info('Got report: {}'.format(report.name))
+
+      file_name = '{}-{}.xml'.format(report.task_name, report.name)
+      file_path = os.path.join(directory, file_name)
+      logging.log(logging.DEBUG, 'Saving report to file {}'.format(file_path))
+
+      if os.path.isfile(file_path):
+        raise Exception('File exists: {}'.format(file_path))
+
+      with io.open(file_path, 'wb') as file:
+        file.write(ET.tostring(raw_report, encoding='utf-8', method='xml', pretty_print=True))
+
+      return True
+    except Exception as ex:
+      logging.error('Get targets error: {}'.format(ex))
       return False
