@@ -8,6 +8,8 @@ from shlex import quote
 from gvm_client import GVM_client
 
 env_ov_passwd = 'OV_PASSWD'
+env_ov_run_tasks = 'OV_AUTORUN_TASKS'
+env_ov_save_reports = 'OV_AUTOSAVE_REPORTS'
 db_path = '/var/lib/openvas/gvmd/gvmd.db'
 gvm_socket = '/var/run/gvmd.sock'
 ov_user = 'admin'
@@ -38,12 +40,12 @@ if __name__ == '__main__':
     print('Admin password hasn\'t specified')
     print('Please pass admin password via {} env variable'.format(env_ov_passwd))
     exit(1)
-  
+
   supervisor_proc = subprocess.Popen(['supervisord','-n', '-c', '/etc/openvas-supervisor.conf'])
 
   try:
     processor = GVM_client(
-      socket_path=gvm_socket, 
+      socket_path=gvm_socket,
       user=ov_user,
       password=os.environ.get(env_ov_passwd),
       loglevel=loglevel)
@@ -62,7 +64,28 @@ if __name__ == '__main__':
     processor.import_reports(reports_path)
     processor.import_overrides(overrides_path)
 
+    if os.environ.get(env_ov_run_tasks, ''):
+      tasks = processor.get_tasks()
+      for task in tasks:
+        if task.status == 'New':
+          processor.run_task(task.id)
+          while True:
+            _task = processor.get_task(task.id)
+            if _task.status == 'Done':
+              if os.environ.get(env_ov_save_reports, '') and _task.last_report != None:
+                try:
+                  processor.save_report(_task.last_report.id, reports_path)
+                except Exception as ex:
+                  logging.error('Saving report error: {}'.format(ex))
+              break
+            elif _task.status == 'Stopped':
+              logging.error('GVM_client error: {}'.format(ex))
+              break
+            else:
+              logging.info('Waiting for task: {}'.format(_task.name))
+              sleep(30)
+
   except Exception as ex:
-    logging.log(logging.ERROR, 'GVM_client error: {}'.format(ex))
-  
+    logging.error('GVM_client error: {}'.format(ex))
+
   supervisor_proc.wait()

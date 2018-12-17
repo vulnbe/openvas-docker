@@ -139,12 +139,26 @@ class Report:
   def __init__(self, report_root=None):
     if report_root != None:
       root = get_root(report_root, 'report')
-
-      self.raw = ET.tostring(root)
-      self.report_id = root.attrib['id']
-      self.name = root.findtext('name', None)
-      self.task_name = root.findtext('task/name', None)
-      self.task_comment = root.findtext('task/comment', None)
+      if root != None:
+        try:
+          self.id = root.attrib['id']
+        except:
+          return None
+        try:
+          self.name = root.findtext('name', None)
+        except:
+          pass
+        try:
+          self.task_name = root.findtext('task/name', None)
+        except:
+          pass
+        try:
+          self.task_comment = root.findtext('task/comment', None)
+        except:
+          pass
+        self.raw = ET.tostring(root)
+      else:
+        return None
 
 class Task:
   name = None
@@ -207,8 +221,14 @@ class Task:
             setattr(self, field, None)
 
       try:
-        current_report = root.find('current_report')
+        current_report = root.find('current_report/report')
         self.current_report = Report(current_report)
+      except:
+        pass
+
+      try:
+        last_report = root.find('last_report/report')
+        self.last_report = Report(last_report)
       except:
         pass
 
@@ -332,9 +352,13 @@ class GVM_client:
 
   def connect(self):
     try:
-      self.gmp.authenticate(self.user, self.password)
       self.connected = self.gmp._connected
-      return True
+      if self.connected == True:
+        return self.connected
+      else:
+        self.gmp.authenticate(self.user, self.password)
+        self.connected = self.gmp._connected
+        return self.connected
     except Exception as ex:
       self.connection_errors += 1
       logging.error('Can\'t connect to service: {}'.format(ex))
@@ -346,7 +370,7 @@ class GVM_client:
       if file_name.lower().endswith(".xml"):
         file_path = os.path.join(directory, file_name)
         logging.info('Reading file {}'.format(file_path))
-        
+
         with io.open(file_path, 'r', encoding='utf-8') as file:
           results.append(''.join(file.readlines()))
     return results
@@ -540,7 +564,7 @@ class GVM_client:
   def run_task(self, task_id:str):
     try:
       response = self.gmp.start_task(task_id=task_id)
-      if response.attrib['status'] == '200':
+      if response.attrib['status'] == '202':
         logging.info('Running task OK: {}'.format(task_id))
         return True
       else:
@@ -581,7 +605,7 @@ class GVM_client:
 
       file_name = '{}-{}.xml'.format(report.task_name, report.name)
       file_path = os.path.join(directory, file_name)
-      logging.log(logging.DEBUG, 'Saving report to file {}'.format(file_path))
+      logging.info('Saving report to file {}'.format(file_path))
 
       if os.path.isfile(file_path):
         raise Exception('File exists: {}'.format(file_path))
