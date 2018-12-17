@@ -71,7 +71,7 @@ if __name__ == '__main__':
         if task.status in ['New', 'Done', 'Stopped']:
           processor.run_task(task.id)
           while True:
-            logging.info('Waiting for task: {}'.format(_task.name))
+            logging.info('Waiting for task: {}'.format(task.name))
             sleep(task_wait_secs)
             _task = processor.get_task(task.id)
             if _task.status == 'Done':
