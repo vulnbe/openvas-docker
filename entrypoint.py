@@ -22,6 +22,7 @@ tasks_path = '/tasks'
 
 gvmd_wait_secs = 6
 gvmd_connect_tries = 10
+task_wait_secs = 30
 
 loglevel = logging.INFO
 
@@ -67,9 +68,11 @@ if __name__ == '__main__':
     if os.environ.get(env_ov_run_tasks, ''):
       tasks = processor.get_tasks()
       for task in tasks:
-        if task.status == 'New':
+        if task.status in ['New', 'Done', 'Stopped']:
           processor.run_task(task.id)
           while True:
+            logging.info('Waiting for task: {}'.format(_task.name))
+            sleep(task_wait_secs)
             _task = processor.get_task(task.id)
             if _task.status == 'Done':
               if os.environ.get(env_ov_save_reports, '') and _task.last_report != None:
@@ -81,9 +84,6 @@ if __name__ == '__main__':
             elif _task.status == 'Stopped':
               logging.error('GVM_client error: {}'.format(ex))
               break
-            else:
-              logging.info('Waiting for task: {}'.format(_task.name))
-              sleep(30)
 
   except Exception as ex:
     logging.error('GVM_client error: {}'.format(ex))
