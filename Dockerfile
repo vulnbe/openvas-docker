@@ -195,6 +195,8 @@ COPY ./gvm_client.py /
 
 RUN chmod +x /entrypoint.py /gvm_client.py
 
+RUN /entrypoint.py --create-cache
+
 VOLUME [ "/configs" ]
 VOLUME [ "/targets" ]
 VOLUME [ "/tasks" ]
