@@ -376,15 +376,22 @@ class GVM_client:
           results.append(''.join(file.readlines()))
     return results
 
-  def sync_wait(self):
+  def wait_connection(self, connection_tries=10, secs_before_attempt=5):
+    while not self.connect():
+      if self.connection_errors <= connection_tries:
+        sleep(secs_before_attempt)
+      else:
+        raise Exception('Can\'t connect to gvmd in {} sec'.format(connection_tries*secs_before_attempt))
+
+  def wait_sync(self):
+    logging.info('Waiting for sync NVTs to complete')
     while True:
       if self.connect():
         families = self.gmp.get_nvt_families().xpath('families/family')
         if len(families) != 0:
           break
         else:
-          logging.info('Waiting for syncing NVTs finished')
-          sleep(15)
+          sleep(5)
 
   def import_configs(self, directory):
     for config in self.get_xmls(directory):
@@ -552,12 +559,12 @@ class GVM_client:
         response = self.gmp.get_task(task_id=task_id)
         if response.attrib['status'] == '200':
           task = Task(response.find('task'))
-          logging.info('Get task OK: {} [{}]'.format(task.name, task_id))
+          logging.debug('Getting task OK: {} [{}]'.format(task.name, task_id))
           return task
         else:
           return None
       except Exception as ex:
-        logging.error('Get task error: {}'.format(ex))
+        logging.error('Getting task error: {}'.format(ex))
 
   def get_task_status(self, task_id):
     if self.connect():
@@ -565,12 +572,12 @@ class GVM_client:
         response = self.gmp.get_task(task_id=task_id)
         if response.attrib['status'] == '200':
           task_status = response.find('task/status').text
-          logging.info('Get task status OK: {} [{}]'.format(task_id, task_status))
+          logging.info('Getting task status OK: {} [{}]'.format(task_id, task_status))
           return task_status
         else:
           return None
       except Exception as ex:
-        logging.error('Get task status error: {}'.format(ex))
+        logging.error('Getting task status error: {}'.format(ex))
 
   def run_task(self, task_id:str):
     if self.connect():
@@ -582,7 +589,7 @@ class GVM_client:
         else:
           return False
       except Exception as ex:
-        logging.error('Running task  error: {}'.format(ex))
+        logging.error('Running task error: {}'.format(ex))
         return False
 
   def _is_container_task(self, task):
@@ -595,7 +602,7 @@ class GVM_client:
         logging.info('Targets found in DB: {}'.format(', '.join([target.name for target in targets])))
         return targets
       except Exception as ex:
-        logging.error('Get targets error: {}'.format(ex))
+        logging.error('Getting targets error: {}'.format(ex))
         return False
 
   def get_tasks(self, exclude_containers=True):
@@ -608,7 +615,7 @@ class GVM_client:
         else:
           return [Task(task) for task in tasks]
       except Exception as ex:
-        logging.error('Get tasks error: {}'.format(ex))
+        logging.error('Getting tasks error: {}'.format(ex))
         return False
 
   def save_report(self, report_id:str, directory:str):
@@ -630,5 +637,5 @@ class GVM_client:
 
         return True
       except Exception as ex:
-        logging.error('Get targets error: {}'.format(ex))
+        logging.error('Getting targets error: {}'.format(ex))
         return False
