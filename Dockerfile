@@ -5,7 +5,7 @@ ARG gvm_libs="v1.0+beta2.tar.gz"
 ARG gvmd="v8.0+beta2.tar.gz"
 ARG gsa="v8.0+beta2.tar.gz"
 
-ARG build_type="Debug"
+ARG build_type="Release"
 ARG install_dir="/openvas"
 ARG install_prefix="/usr"
 ARG bin_dir="/usr/bin"
@@ -52,7 +52,8 @@ RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - && \
       libksba-dev \
       libsnmp-dev \
       libgcrypt20-dev \
-      libsqlite3-dev \
+      libpq-dev \
+      postgresql-server-dev-10 \
       libical-dev \
       libmicrohttpd-dev \
       libxml2-dev \
@@ -91,7 +92,7 @@ RUN curl -O -L "https://github.com/greenbone/gvmd/archive/${gvmd}" && \
     cd gvmd-* && \
     mkdir build && \
     cd build && \
-    cmake ${cmake_build_params} .. && \
+    cmake ${cmake_build_params} -DBACKEND=POSTGRESQL .. && \
     make && \
     make DESTDIR=${install_dir} install
 
@@ -153,7 +154,8 @@ RUN apt update && \
       rsync \
       snmp \
       socat \
-      sqlite3 \
+      postgresql-10 \
+      postgresql-contrib \
       supervisor \
       texlive-latex-base \
       preview-latex-style \
@@ -181,12 +183,17 @@ RUN greenbone-certdata-sync && \
 
 RUN greenbone-scapdata-sync
 
-RUN gvm-manage-certs -a && \
-    gvmd -d /var/lib/openvas/gvmd/gvmd.db --create-user test && \
-    gvmd -d /var/lib/openvas/gvmd/gvmd.db --delete-user test && \
-    curl -O -L https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xml && \
-    gvm-portnames-update service-names-port-numbers.xml && \
-    rm service-names-port-numbers.xml
+# Configuring PostgreSQL
+
+RUN sed -i 's|^#checkpoint_timeout = 5min|checkpoint_timeout = 1h|;s|^#checkpoint_warning = 30s|checkpoint_warning = 0|' /etc/postgresql/10/main/postgresql.conf && \
+    echo 'host all all 127.0.0.1/32 trust' >> /etc/postgresql/10/main/pg_hba.conf && \
+    /etc/init.d/postgresql start && \
+    pg_isready -h localhost -p 5432 && \
+    while [ $? -ne 0 ]; do sleep 5; pg_isready -h localhost -p 5432; done && \
+    su - postgres -c "createuser -DRS root" && \
+    su - postgres -c "createdb -O root gvmd" && \
+    su - postgres -c "psql gvmd -c 'create role dba with superuser noinherit; grant dba to root; create extension \"uuid-ossp\";'" && \
+    /etc/init.d/postgresql stop
 
 COPY ./redis.conf /etc/openvas-redis.conf
 COPY ./supervisor.conf /etc/openvas-supervisor.conf
@@ -195,12 +202,27 @@ COPY ./gvm_client.py /
 
 RUN chmod +x /entrypoint.py /gvm_client.py
 
-RUN /entrypoint.py --create-cache
+# Creating cache of NVTs and other feeds
+
+RUN gvm-manage-certs -a && \
+    /entrypoint.py --create-cache
+
+# Importing port names configuration
+
+RUN /etc/init.d/postgresql start && \
+    pg_isready -h localhost -p 5432 && \
+    while [ $? -ne 0 ]; do sleep 5; pg_isready -h localhost -p 5432; done && \
+    curl -O -L https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xml && \
+    gvm-portnames-update service-names-port-numbers.xml && \
+    rm service-names-port-numbers.xml && \
+    /etc/init.d/postgresql stop
 
 VOLUME [ "/configs" ]
 VOLUME [ "/targets" ]
 VOLUME [ "/tasks" ]
 VOLUME [ "/reports" ]
+VOLUME [ "/overrides" ]
+VOLUME [ "/filters" ]
 
 EXPOSE 80 443
 
