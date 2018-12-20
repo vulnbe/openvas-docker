@@ -383,15 +383,16 @@ class GVM_client:
       else:
         raise Exception('Can\'t connect to gvmd in {} sec'.format(connection_tries*secs_before_attempt))
 
-  def wait_sync(self):
-    logging.info('Waiting for sync NVTs to complete')
+  def wait_sync(self, interval=15):
+    logging.info('Waiting for NVTs/Feeds sync to complete')
     while True:
       if self.connect():
         families = self.gmp.get_nvt_families().xpath('families/family')
-        if len(families) != 0:
+        feeds = self.gmp.get_feeds().xpath('feed/currently_syncing')
+        if len(families) != 0 and len(feeds) == 0:
           break
         else:
-          sleep(5)
+          sleep(interval)
 
   def import_configs(self, directory):
     for config in self.get_xmls(directory):
