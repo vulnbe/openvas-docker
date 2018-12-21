@@ -122,6 +122,9 @@ ARG version=10
 ARG python_gvm="==1.0.0b2"
 ARG install_dir="/openvas"
 
+ENV GSA_PARAMS="--listen=:: --allow-header-host=openvas"
+ENV GVM_PARAMS=""
+
 LABEL Author="Alexey Pronin a@vuln.be"
 
 # Copy openvas binaries
@@ -229,7 +232,7 @@ RUN /etc/init.d/postgresql start && \
     rm service-names-port-numbers.xml && \
     /etc/init.d/postgresql stop
 
-COPY ./supervisor.conf /etc/openvas-supervisor.conf
+COPY ./supervisor.conf /etc/openvas-supervisor.conf.tpl
 
 VOLUME [ "/configs" ]
 VOLUME [ "/targets" ]

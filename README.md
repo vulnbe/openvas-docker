@@ -34,11 +34,24 @@ docker run -d -it \
 * To enable automatic scan starting pass non-empty OV_AUTORUN_TASKS env variable
 
 ```
-docker run -e OV_AUTORUN_TASKS=true ...
+docker run \
+  -e OV_AUTORUN_TASKS=true \
+  ...
 ```
 
 * To enable automatic report saving pass non-empty OV_AUTOSAVE_REPORTS env variable
 
 ```
-docker run -e OV_AUTOSAVE_REPORTS=true ...
+docker run \
+  -e OV_AUTOSAVE_REPORTS=true \
+  ...
+```
+
+* You can set GVM_PARAMS and GSA_PARAMS env variables to pass params to _gvmd_ and _gsad_ respectively
+
+```
+docker run \
+  -e GVM_PARAMS="--max-ips-per-target=4096" \
+  -e GSA_PARAMS="--listen=:: --allow-header-host=openvas" \
+  ...
 ```
