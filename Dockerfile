@@ -215,7 +215,9 @@ RUN chmod +x /entrypoint.py /gvm_client.py
 # Creating cache of NVTs and other feeds
 
 RUN gvm-manage-certs -a && \
-    /entrypoint.py --create-cache
+    rm -rf /var/run/* && \
+    /entrypoint.py --create-cache && \
+    rm -rf /var/run/*
 
 # Importing port names configuration
 

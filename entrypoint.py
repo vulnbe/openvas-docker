@@ -14,6 +14,7 @@ env_ov_save_reports = 'OV_AUTOSAVE_REPORTS'
 redis_conf = '/etc/openvas-redis.conf'
 redis_socket = '/tmp/redis.sock'
 gvm_socket = '/var/run/gvmd.sock'
+supervisor_conf = '/etc/openvas-supervisor.conf'
 ov_user = 'admin'
 
 overrides_path = '/overrides'
@@ -110,7 +111,7 @@ if __name__ == '__main__':
 
     openvassd_proc = subprocess.Popen(['openvassd', '-f'])
     sleep(openvassd_wait_secs)
-    
+
     # Prepare DB
     subprocess.Popen(['gvmd', '-u', '-v']).wait()
 
@@ -158,7 +159,7 @@ if __name__ == '__main__':
         print('Please pass admin password via {} env variable'.format(env_ov_passwd))
         exit(1)
 
-      supervisor_proc = subprocess.Popen(['supervisord','-n', '-c', '/etc/openvas-supervisor.conf'])
+      supervisor_proc = subprocess.Popen(['supervisord','-n', '-c', supervisor_conf])
 
     try:
       processor = GVM_client(
