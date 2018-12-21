@@ -17,11 +17,9 @@ image:
 
 push: tag
 	docker push $(REPO)/$(SERVICE):$(TAG)
-	docker push $(REPO)/$(SERVICE):latest
 
 tag:
 	docker tag $(SERVICE):$(TAG) $(REPO)/$(SERVICE):$(TAG)
-	docker tag $(SERVICE):$(TAG) $(REPO)/$(SERVICE):latest
 
 rm:
 	docker rm -f $(SERVICE)
