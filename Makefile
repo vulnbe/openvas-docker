@@ -1,13 +1,19 @@
 SERVICE=openvas
 REPO=vulnbe
-TAG=10-beta2
+TAG=9
 
 .PHONY: image test all push tag
 
 all: image push
 
 image:
-	docker build -t $(SERVICE):$(TAG) .
+	docker build \
+		--build-arg version=9 \
+		--build-arg openvas_scanner="v5.1.3.tar.gz" \
+		--build-arg gvm_libs="v9.0.3.tar.gz" \
+		--build-arg gvmd="v7.0.3.tar.gz" \
+		--build-arg gsa="v7.0.3.tar.gz" \
+		-t $(SERVICE):$(TAG) .
 
 push: tag
 	docker push $(REPO)/$(SERVICE):$(TAG)

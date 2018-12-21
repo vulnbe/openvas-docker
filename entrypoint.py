@@ -108,12 +108,25 @@ if __name__ == '__main__':
     run_postgres()
     run_redis()
 
-    admin_pass = 'cache'
-    create_user(ov_user, admin_pass)
-
     openvassd_proc = subprocess.Popen(['openvassd', '-f'])
     sleep(openvassd_wait_secs)
+    
+    # Prepare DB
+    subprocess.Popen(['gvmd', '-u', '-v']).wait()
+
+    # Sync feeds
+    subprocess.Popen(['greenbone-nvt-sync']).wait()
+    sleep(openvassd_wait_secs)
+    subprocess.Popen(['greenbone-certdata-sync']).wait()
+    sleep(openvassd_wait_secs)
+    subprocess.Popen(['greenbone-scapdata-sync']).wait()
+
+    # Update DB
+    subprocess.Popen(['gvmd', '-u', '-v']).wait()
     gvmd_proc = subprocess.Popen(['gvmd', '-f'])
+
+    admin_pass = 'cache'
+    create_user(ov_user, admin_pass)
 
     processor = GVM_client(
       socket_path=gvm_socket,

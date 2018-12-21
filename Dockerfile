@@ -1,5 +1,6 @@
 FROM ubuntu:bionic as build
 
+ARG version=10
 ARG openvas_scanner="v6.0+beta2.tar.gz"
 ARG gvm_libs="v1.0+beta2.tar.gz"
 ARG gvmd="v8.0+beta2.tar.gz"
@@ -57,6 +58,7 @@ RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - && \
       libical-dev \
       libmicrohttpd-dev \
       libxml2-dev \
+      libxslt1-dev \
       nodejs \
       python-polib \
       yarn && \
@@ -98,9 +100,14 @@ RUN curl -O -L "https://github.com/greenbone/gvmd/archive/${gvmd}" && \
 
 # Building gsa
 
+COPY ./gsa7.patch /tmp/
+
 RUN curl -O -L "https://github.com/greenbone/gsa/archive/${gsa}" && \
     tar -xvf ${gsa} && \
-    cd gsa-8.0-* && \
+    cd gsa-* && \
+    if [ "${version}" = "9" ]; then \
+      git apply /tmp/gsa7.patch || echo 'Git patch error'; \
+    fi && \
     mkdir build && \
     cd build && \
     cmake ${cmake_build_params} .. && \
@@ -110,9 +117,9 @@ RUN curl -O -L "https://github.com/greenbone/gsa/archive/${gsa}" && \
 
 FROM ubuntu:bionic
 
+ARG version=10
 ARG python_gvm="==1.0.0b2"
 ARG install_dir="/openvas"
-ARG wait_sync="210"
 
 LABEL Author="Alexey Pronin a@vuln.be"
 
@@ -173,17 +180,15 @@ RUN apt update && \
     pip3 install "python-gvm${python_gvm}" && \
     rm -rf /var/lib/apt/lists/*
 
-# Syncing NVT, CERT and SCAP data
+# Adding symlinks GVM9 <-> GVM10
 
-RUN greenbone-nvt-sync && \
-    sleep ${wait_sync}
+RUN if [ "${version}" = "9" ]; then \
+      ln -s /usr/bin/openvasmd /usr/bin/gvmd; \
+      ln -s /usr/bin/openvas-portnames-update /usr/bin/gvm-portnames-update; \
+      ln -s /usr/bin/openvas-manage-certs /usr/bin/gvm-manage-certs; \
+    fi
 
-RUN greenbone-certdata-sync && \
-    sleep ${wait_sync}
-
-RUN greenbone-scapdata-sync
-
-# Configuring PostgreSQL
+# Configuring PostgreSQL and preparing DB
 
 RUN sed -i 's|^#checkpoint_timeout = 5min|checkpoint_timeout = 1h|;s|^#checkpoint_warning = 30s|checkpoint_warning = 0|' /etc/postgresql/10/main/postgresql.conf && \
     echo 'host all all 127.0.0.1/32 trust' >> /etc/postgresql/10/main/pg_hba.conf && \
@@ -191,8 +196,13 @@ RUN sed -i 's|^#checkpoint_timeout = 5min|checkpoint_timeout = 1h|;s|^#checkpoin
     pg_isready -h localhost -p 5432 && \
     while [ $? -ne 0 ]; do sleep 5; pg_isready -h localhost -p 5432; done && \
     su - postgres -c "createuser -DRS root" && \
-    su - postgres -c "createdb -O root gvmd" && \
-    su - postgres -c "psql gvmd -c 'create role dba with superuser noinherit; grant dba to root; create extension \"uuid-ossp\";'" && \
+    if [ "${version}" = "10" ]; then \
+      su - postgres -c "createdb -O root gvmd"; \
+      su - postgres -c "psql gvmd -c 'create role dba with superuser noinherit; grant dba to root; create extension \"uuid-ossp\";'"; \
+    else \
+      su - postgres -c "createdb -O root tasks"; \
+      su - postgres -c "psql tasks -c 'create role dba with superuser noinherit; grant dba to root; create extension \"uuid-ossp\";'"; \
+    fi && \
     /etc/init.d/postgresql stop
 
 COPY ./redis.conf /etc/openvas-redis.conf
