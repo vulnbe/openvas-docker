@@ -23,8 +23,10 @@ rm:
 test_run:
 	docker run -d -it \
 		-e OV_PASSWD=123456 \
-		-p 127.0.0.1:80:80 \
-		-p 127.0.0.1:443:443 \
+		-e OV_AUTORUN_TASKS=true \
+		-e OV_AUTOSAVE_REPORTS=true \
+		-p 80:80 \
+		-p 443:443 \
 		-v $(shell pwd)/configs:/configs:ro \
 		-v $(shell pwd)/targets:/targets:ro \
 		-v $(shell pwd)/tasks:/tasks:ro \
