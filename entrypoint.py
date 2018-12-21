@@ -123,7 +123,9 @@ if __name__ == '__main__':
 
     # Update DB
     subprocess.Popen(['gvmd', '-u', '-v']).wait()
-    gvmd_proc = subprocess.Popen(['gvmd', '-f'])
+
+    # Run gvm and check updates
+    gvmd_proc = subprocess.Popen(['gvmd', '-f', '-c', gvm_socket])
 
     admin_pass = 'cache'
     create_user(ov_user, admin_pass)

@@ -61,6 +61,7 @@ RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - && \
       libxslt1-dev \
       nodejs \
       python-polib \
+      xsltproc \
       yarn && \
     mkdir -p ${install_dir}
 
@@ -206,7 +207,6 @@ RUN sed -i 's|^#checkpoint_timeout = 5min|checkpoint_timeout = 1h|;s|^#checkpoin
     /etc/init.d/postgresql stop
 
 COPY ./redis.conf /etc/openvas-redis.conf
-COPY ./supervisor.conf /etc/openvas-supervisor.conf
 COPY ./entrypoint.py /
 COPY ./gvm_client.py /
 
@@ -226,6 +226,8 @@ RUN /etc/init.d/postgresql start && \
     gvm-portnames-update service-names-port-numbers.xml && \
     rm service-names-port-numbers.xml && \
     /etc/init.d/postgresql stop
+
+COPY ./supervisor.conf /etc/openvas-supervisor.conf
 
 VOLUME [ "/configs" ]
 VOLUME [ "/targets" ]
